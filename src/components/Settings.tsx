@@ -1,6 +1,7 @@
-import React from 'react';
-import { Microscope, Settings2, Info, ChevronRight, Globe } from 'lucide-react';
+import React, { useState } from 'react';
+import { Microscope, Settings2, Info, ChevronRight, Globe, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 import { MicroscopeType } from '../types';
+import { testConnection } from '../services/gemini';
 
 interface SettingsProps {
   magnification: string;
@@ -9,6 +10,8 @@ interface SettingsProps {
   setMicroscopeType: (v: MicroscopeType) => void;
   studentLevel: string;
   setStudentLevel: (v: string) => void;
+  customApiKey: string;
+  setCustomApiKey: (v: string) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -17,8 +20,20 @@ export const Settings: React.FC<SettingsProps> = ({
   microscopeType,
   setMicroscopeType,
   studentLevel,
-  setStudentLevel
+  setStudentLevel,
+  customApiKey,
+  setCustomApiKey
 }) => {
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'fail'>('idle');
+
+  const handleTest = async () => {
+    if (!customApiKey) return;
+    setTestStatus('testing');
+    const ok = await testConnection(customApiKey);
+    setTestStatus(ok ? 'success' : 'fail');
+    setTimeout(() => setTestStatus('idle'), 3000);
+  };
+
   return (
     <div className="flex flex-col h-full bg-bg-deep p-6">
       <div className="mb-8">
@@ -26,7 +41,60 @@ export const Settings: React.FC<SettingsProps> = ({
         <p className="text-text-light/60 text-sm">Configure your hardware and analysis</p>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-8 overflow-y-auto pb-20">
+        {/* API Key Fallback */}
+        <section>
+          <div className="flex items-center gap-2 text-warning font-display text-sm mb-4">
+            <Zap size={16} /> API CONFIGURATION (FALLBACK)
+          </div>
+          <div className="bg-card border border-warning/20 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-mono text-text-light/40 uppercase">Manual API Key</label>
+              {customApiKey && (
+                <button 
+                  onClick={() => setCustomApiKey('')}
+                  className="text-[10px] text-warning hover:underline"
+                >
+                  Clear Key
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="Paste AIzaSy... key here"
+                value={customApiKey}
+                onChange={(e) => setCustomApiKey(e.target.value)}
+                className={`flex-1 bg-transparent text-sm font-mono focus:outline-none border-b pb-1 transition-colors ${
+                  customApiKey && !customApiKey.trim().startsWith('AIza') 
+                    ? 'border-warning text-warning' 
+                    : 'border-white/10 text-accent-cyan'
+                }`}
+              />
+              <button
+                onClick={handleTest}
+                disabled={!customApiKey || testStatus !== 'idle'}
+                className={`px-3 py-1 rounded-lg text-[10px] font-display transition-all flex items-center gap-1 ${
+                  testStatus === 'success' ? 'bg-accent-green text-bg-deep' :
+                  testStatus === 'fail' ? 'bg-warning text-white' :
+                  'bg-white/10 text-text-light hover:bg-white/20'
+                }`}
+              >
+                {testStatus === 'testing' ? '...' : 
+                 testStatus === 'success' ? <><CheckCircle2 size={12}/> OK</> :
+                 testStatus === 'fail' ? <><AlertCircle size={12}/> ERR</> : 
+                 'TEST'}
+              </button>
+            </div>
+            {customApiKey && !customApiKey.trim().startsWith('AIza') && (
+              <p className="text-[10px] text-warning mt-1">Key must start with "AIza"</p>
+            )}
+            <p className="text-[10px] text-text-light/30 mt-2">
+              Use this if you cannot find the AI Studio Secrets panel.
+            </p>
+          </div>
+        </section>
+
         {/* Hardware */}
         <section>
           <div className="flex items-center gap-2 text-accent-cyan font-display text-sm mb-4">

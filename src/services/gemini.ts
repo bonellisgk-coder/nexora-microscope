@@ -46,64 +46,117 @@ export async function analyzeImage(
   base64Image: string,
   magnification: string,
   microscopeType: string,
-  studentLevel: string = "Grade 10"
+  studentLevel: string = "Grade 10",
+  customApiKey?: string
 ): Promise<AnalysisResult> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  const apiKey = (customApiKey && customApiKey.trim().startsWith('AIza')) 
+    ? customApiKey.trim() 
+    : (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.startsWith('AIza'))
+      ? process.env.GEMINI_API_KEY
+      : null;
+
+  if (!apiKey) {
+    throw new Error("Missing or Invalid API Key. Please go to Settings and paste a valid Gemini API key starting with 'AIza'.");
+  }
   
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
-    contents: [
-      {
-        parts: [
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: base64Image,
+  const ai = new GoogleGenAI({ apiKey });
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Image,
+              },
             },
-          },
-          {
-            text: `Analyze this microscope image. Magnification: ${magnification}. Microscope type: ${microscopeType}. Student level: ${studentLevel}. Provide full structured analysis.`,
-          },
-        ],
+            {
+              text: `Analyze this microscope image. Magnification: ${magnification}. Microscope type: ${microscopeType}. Student level: ${studentLevel}. Provide full structured analysis.`,
+            },
+          ],
+        },
+      ],
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        temperature: 0.3,
+        topP: 0.9,
       },
-    ],
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      temperature: 0.3,
-      topP: 0.9,
-    },
-  });
+    });
 
-  const text = response.text || "";
-  
-  // Extract specimen name from markdown
-  const match = text.match(/🔬 \*\*Specimen\*\*: (.*)/);
-  const specimenName = match ? match[1].trim() : "Unknown Specimen";
+    const text = response.text || "";
+    
+    // Extract specimen name from markdown
+    const match = text.match(/🔬 \*\*Specimen\*\*: (.*)/);
+    const specimenName = match ? match[1].trim() : "Unknown Specimen";
 
-  return { text, specimenName };
+    return { text, specimenName };
+  } catch (error: any) {
+    if (error.message?.includes('API key not valid')) {
+      throw new Error("The API key you provided is invalid. Please double-check it in Settings.");
+    }
+    throw error;
+  }
 }
 
-export async function generateLabReport(analysis: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-  
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
-    contents: [
-      {
-        parts: [
-          {
-            text: `Based on the following analysis, generate a complete lab report template for a student. Include Objective, Materials, Procedure, Observations, Results, and Conclusion.
-            
-            Analysis:
-            ${analysis}`,
-          },
-        ],
-      },
-    ],
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-    },
-  });
+export async function generateLabReport(analysis: string, customApiKey?: string): Promise<string> {
+  const apiKey = (customApiKey && customApiKey.trim().startsWith('AIza')) 
+    ? customApiKey.trim() 
+    : (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.startsWith('AIza'))
+      ? process.env.GEMINI_API_KEY
+      : null;
 
-  return response.text || "";
+  if (!apiKey) {
+    throw new Error("API Key not found.");
+  }
+  const ai = new GoogleGenAI({ apiKey });
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [
+        {
+          parts: [
+            {
+              text: `Based on the following analysis, generate a complete lab report template for a student. Include Objective, Materials, Procedure, Observations, Results, and Conclusion.
+              
+              Analysis:
+              ${analysis}`,
+            },
+          ],
+        },
+      ],
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+      },
+    });
+
+    return response.text || "";
+  } catch (error: any) {
+    if (error.message?.includes('API key not valid')) {
+      throw new Error("The API key you provided is invalid.");
+    }
+    throw error;
+  }
+}
+
+export async function testConnection(customApiKey: string): Promise<boolean> {
+  const apiKey = customApiKey.trim();
+  if (!apiKey.startsWith('AIza')) return false;
+  
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    // Simple light-weight call to test key
+    await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ parts: [{ text: "hi" }] }],
+      config: { maxOutputTokens: 1 }
+    });
+    return true;
+  } catch (e) {
+    console.error("Connection test failed:", e);
+    return false;
+  }
 }

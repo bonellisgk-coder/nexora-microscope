@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Microscope, Camera, Library, Settings as SettingsIcon, Loader2, ChevronLeft } from 'lucide-react';
+import { Microscope, Camera, Library, Settings as SettingsIcon, Loader2, ChevronLeft, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CameraView } from './components/CameraView';
 import { AnalysisPanel } from './components/AnalysisPanel';
@@ -24,16 +24,26 @@ export default function App() {
   const [magnification, setMagnification] = useState('400x');
   const [microscopeType, setMicroscopeType] = useState<MicroscopeType>('brightfield');
   const [studentLevel, setStudentLevel] = useState('Grade 10');
+  const [customApiKey, setCustomApiKey] = useState(() => {
+    const saved = localStorage.getItem('microscope_api_key');
+    // Default to the key provided by the user if nothing is saved
+    return saved || 'AIzaSyBjKAx-X5vKLHgD8blm4EdR7Kd2lZrsPcQ';
+  });
+
+  const handleCustomApiKeyChange = (val: string) => {
+    setCustomApiKey(val);
+    localStorage.setItem('microscope_api_key', val);
+  };
 
   const handleCapture = async (base64: string) => {
     setIsAnalyzing(true);
     setCapturedImage(base64);
     try {
-      const result = await analyzeImage(base64, magnification, microscopeType, studentLevel);
+      const result = await analyzeImage(base64, magnification, microscopeType, studentLevel, customApiKey);
       setAnalysis(result.text);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Analysis failed. Please check your connection and API key.');
+      alert(err.message || 'Analysis failed. Please check your connection and API key.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -73,7 +83,7 @@ export default function App() {
     if (!analysis) return;
     setIsGeneratingReport(true);
     try {
-      const report = await generateLabReport(analysis);
+      const report = await generateLabReport(analysis, customApiKey);
       setLabReport(report);
     } catch (err) {
       console.error(err);
@@ -133,10 +143,35 @@ export default function App() {
                 setMicroscopeType={setMicroscopeType}
                 studentLevel={studentLevel}
                 setStudentLevel={setStudentLevel}
+                customApiKey={customApiKey}
+                setCustomApiKey={handleCustomApiKeyChange}
               />
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Missing API Key Warning */}
+        {!customApiKey && !process.env.GEMINI_API_KEY && activeTab === 'live' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute top-20 left-6 right-6 z-30 bg-warning/90 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-xl"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="text-white shrink-0" size={24} />
+              <div>
+                <h3 className="font-display text-sm text-white">API Key Required</h3>
+                <p className="text-xs text-white/80 mt-1">Please go to Settings and paste your Gemini API key to enable analysis.</p>
+                <button 
+                  onClick={() => setActiveTab('settings')}
+                  className="mt-3 px-4 py-2 bg-white text-warning rounded-xl font-display text-[10px] uppercase tracking-wider"
+                >
+                  Go to Settings
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Loading Overlay */}
         <AnimatePresence>
