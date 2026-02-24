@@ -1,0 +1,5 @@
+{
+  "name": "MicroScope AI",
+  "description": "Educational microscope image analysis powered by Gemini AI",
+  "requestFramePermissions": ["camera"]
+}
